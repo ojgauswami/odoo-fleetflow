@@ -11,7 +11,7 @@ CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('Manager', 'Dispatcher') NOT NULL DEFAULT 'Dispatcher',
+    role ENUM('Super Admin', 'Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst') NOT NULL DEFAULT 'Dispatcher',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -32,13 +32,15 @@ CREATE TABLE vehicles (
 );
 
 -- ============================================================
--- DRIVERS TABLE
+-- DRIVERS TABLE (with mobile & email)
 -- ============================================================
 CREATE TABLE drivers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     license_number VARCHAR(30) NOT NULL UNIQUE,
     license_expiry_date DATE NOT NULL,
+    mobile VARCHAR(15) DEFAULT NULL,
+    email VARCHAR(100) DEFAULT NULL,
     completion_rate_percent DECIMAL(5,2) NOT NULL DEFAULT 100.00,
     safety_score_percent DECIMAL(5,2) NOT NULL DEFAULT 100.00,
     complaints_count INT NOT NULL DEFAULT 0,
@@ -99,12 +101,15 @@ CREATE TABLE expenses (
 -- MOCK DATA - Indian Context
 -- ============================================================
 
--- Users (passwords are bcrypt hash of 'password123')
+-- Users (all passwords: 'password123')
 INSERT INTO users (username, password_hash, role) VALUES
+('super', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Super Admin'),
 ('ramesh_mgr', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Manager'),
 ('priya_mgr', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Manager'),
 ('suresh_disp', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Dispatcher'),
-('neha_disp', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Dispatcher');
+('neha_disp', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Dispatcher'),
+('vikram_safety', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Safety Officer'),
+('anita_finance', '$2b$10$XvJ5YK0qX5K5K5K5K5K5KuO5K5K5K5K5K5K5K5K5K5K5K5K5K5K', 'Financial Analyst');
 
 -- Vehicles (Indian plates, Indian truck models)
 INSERT INTO vehicles (plate, model, type, max_payload_kg, odometer, status, acquisition_cost, revenue_generated) VALUES
@@ -121,18 +126,18 @@ INSERT INTO vehicles (plate, model, type, max_payload_kg, odometer, status, acqu
 ('MP-09-UV-4444', 'Eicher Pro 6049', 'Container', 24000.00, 134000, 'On Trip', 3000000.00, 4100000.00),
 ('RJ-27-WX-5555', 'Tata Ultra T.16', 'Refrigerated', 10000.00, 62000, 'Idle', 1600000.00, 1900000.00);
 
--- Drivers (Indian names)
-INSERT INTO drivers (name, license_number, license_expiry_date, completion_rate_percent, safety_score_percent, complaints_count, status) VALUES
-('Amit Bhai', 'GJ-2019-0045678', '2027-06-15', 96.50, 92.00, 1, 'On Duty'),
-('Rajesh Kumar', 'MH-2020-0078912', '2026-11-30', 98.00, 95.50, 0, 'On Duty'),
-('Vijay Singh', 'RJ-2018-0034567', '2025-03-20', 88.00, 78.00, 4, 'Suspended'),
-('Sunil Yadav', 'DL-2021-0012345', '2027-09-10', 94.00, 90.00, 2, 'On Duty'),
-('Manoj Patel', 'GJ-2019-0098765', '2027-01-25', 97.50, 94.00, 0, 'On Duty'),
-('Ravi Sharma', 'KA-2020-0056789', '2026-08-18', 91.00, 88.50, 3, 'On Duty'),
-('Deepak Chauhan', 'TN-2021-0043210', '2027-04-12', 99.00, 97.00, 0, 'On Duty'),
-('Arjun Mehra', 'UP-2019-0087654', '2026-12-05', 93.50, 91.00, 1, 'On Duty'),
-('Sanjay Gupta', 'MP-2020-0065432', '2027-07-22', 95.00, 89.00, 2, 'On Duty'),
-('Kishore Nair', 'MH-2022-0021098', '2028-02-14', 100.00, 98.50, 0, 'On Duty');
+-- Drivers (Indian names with mobile & email)
+INSERT INTO drivers (name, license_number, license_expiry_date, mobile, email, completion_rate_percent, safety_score_percent, complaints_count, status) VALUES
+('Amit Bhai', 'GJ-2019-0045678', '2027-06-15', '9876543210', 'amit.bhai@fleetflow.in', 96.50, 92.00, 1, 'On Duty'),
+('Rajesh Kumar', 'MH-2020-0078912', '2026-11-30', '9823456789', 'rajesh.kumar@fleetflow.in', 98.00, 95.50, 0, 'On Duty'),
+('Vijay Singh', 'RJ-2018-0034567', '2025-03-20', '9812345678', 'vijay.singh@fleetflow.in', 88.00, 78.00, 4, 'Suspended'),
+('Sunil Yadav', 'DL-2021-0012345', '2027-09-10', '9801234567', 'sunil.yadav@fleetflow.in', 94.00, 90.00, 2, 'On Duty'),
+('Manoj Patel', 'GJ-2019-0098765', '2027-01-25', '9790123456', 'manoj.patel@fleetflow.in', 97.50, 94.00, 0, 'On Duty'),
+('Ravi Sharma', 'KA-2020-0056789', '2026-08-18', '9789012345', 'ravi.sharma@fleetflow.in', 91.00, 88.50, 3, 'On Duty'),
+('Deepak Chauhan', 'TN-2021-0043210', '2027-04-12', '9778901234', 'deepak.chauhan@fleetflow.in', 99.00, 97.00, 0, 'On Duty'),
+('Arjun Mehra', 'UP-2019-0087654', '2026-12-05', '9767890123', 'arjun.mehra@fleetflow.in', 93.50, 91.00, 1, 'On Duty'),
+('Sanjay Gupta', 'MP-2020-0065432', '2027-07-22', '9756789012', 'sanjay.gupta@fleetflow.in', 95.00, 89.00, 2, 'On Duty'),
+('Kishore Nair', 'MH-2022-0021098', '2028-02-14', '9745678901', 'kishore.nair@fleetflow.in', 100.00, 98.50, 0, 'On Duty');
 
 -- Trips (Indian city routes)
 INSERT INTO trips (vehicle_id, driver_id, origin, destination, cargo_weight_kg, estimated_fuel_cost, status, created_at, completed_at) VALUES

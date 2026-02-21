@@ -50,6 +50,14 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Vehicle, driver, origin, destination, and cargo weight are required' });
         }
 
+        // VALIDATION: No negatives
+        if (parseFloat(cargo_weight_kg) <= 0) {
+            return res.status(400).json({ error: 'Cargo weight must be greater than 0' });
+        }
+        if (estimated_fuel_cost !== undefined && parseFloat(estimated_fuel_cost) < 0) {
+            return res.status(400).json({ error: 'Estimated fuel cost cannot be negative' });
+        }
+
         // Fetch vehicle to check payload
         const [vehicles] = await db.query('SELECT * FROM vehicles WHERE id = ?', [vehicle_id]);
         if (vehicles.length === 0) return res.status(404).json({ error: 'Vehicle not found' });
@@ -143,6 +151,30 @@ router.put('/:id/complete', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to complete trip' });
+    }
+});
+
+// PUT cancel a trip
+router.put('/:id/cancel', async (req, res) => {
+    try {
+        const [trips] = await db.query('SELECT * FROM trips WHERE id = ?', [req.params.id]);
+        if (trips.length === 0) return res.status(404).json({ error: 'Trip not found' });
+        const trip = trips[0];
+        if (trip.status === 'Completed') return res.status(400).json({ error: 'Cannot cancel a completed trip' });
+        if (trip.status === 'Cancelled') return res.status(400).json({ error: 'Trip is already cancelled' });
+
+        await db.query('UPDATE trips SET status = "Cancelled" WHERE id = ?', [req.params.id]);
+        await db.query('UPDATE vehicles SET status = "Idle" WHERE id = ?', [trip.vehicle_id]);
+
+        const [updated] = await db.query(
+            `SELECT t.*, v.plate, v.model AS vehicle_model, d.name AS driver_name
+       FROM trips t JOIN vehicles v ON t.vehicle_id = v.id JOIN drivers d ON t.driver_id = d.id
+       WHERE t.id = ?`, [req.params.id]
+        );
+        res.json(updated[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to cancel trip' });
     }
 });
 

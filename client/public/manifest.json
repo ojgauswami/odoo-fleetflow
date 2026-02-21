@@ -1,0 +1,17 @@
+{
+    "name": "FleetFlow",
+    "short_name": "FleetFlow",
+    "description": "Galaxy Fleet Management System — Real-time transport logistics",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#050510",
+    "theme_color": "#9333ea",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%239333ea'/><text x='50' y='68' font-size='50' text-anchor='middle' fill='white'>⚡</text></svg>",
+            "sizes": "192x192",
+            "type": "image/svg+xml"
+        }
+    ]
+}

@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// POST create expense
+// POST create expense — with full validation
 router.post('/', async (req, res) => {
     try {
         const { trip_id, vehicle_id, driver_id, distance_km, fuel_expense, misc_expense } = req.body;
@@ -51,10 +51,31 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Trip, vehicle, and driver are required' });
         }
 
+        // VALIDATION: No negative values
+        const dist = parseFloat(distance_km) || 0;
+        const fuel = parseFloat(fuel_expense) || 0;
+        const misc = parseFloat(misc_expense) || 0;
+
+        if (dist < 0) return res.status(400).json({ error: 'Distance cannot be negative' });
+        if (fuel < 0) return res.status(400).json({ error: 'Fuel expense cannot be negative' });
+        if (misc < 0) return res.status(400).json({ error: 'Misc expense cannot be negative' });
+
+        // Check trip exists
+        const [trips] = await db.query('SELECT * FROM trips WHERE id = ?', [trip_id]);
+        if (trips.length === 0) return res.status(404).json({ error: 'Trip not found' });
+
+        // Check vehicle exists
+        const [vehicles] = await db.query('SELECT * FROM vehicles WHERE id = ?', [vehicle_id]);
+        if (vehicles.length === 0) return res.status(404).json({ error: 'Vehicle not found' });
+
+        // Check driver exists
+        const [drivers] = await db.query('SELECT * FROM drivers WHERE id = ?', [driver_id]);
+        if (drivers.length === 0) return res.status(404).json({ error: 'Driver not found' });
+
         const [result] = await db.query(
             `INSERT INTO expenses (trip_id, vehicle_id, driver_id, distance_km, fuel_expense, misc_expense)
        VALUES (?, ?, ?, ?, ?, ?)`,
-            [trip_id, vehicle_id, driver_id, distance_km || 0, fuel_expense || 0, misc_expense || 0]
+            [trip_id, vehicle_id, driver_id, dist, fuel, misc]
         );
 
         const [newExpense] = await db.query(

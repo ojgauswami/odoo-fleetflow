@@ -1,178 +1,173 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Shield, Star, AlertCircle, Award, TrendingUp, UserCheck } from 'lucide-react'
+import { Trophy, Star, AlertTriangle, Download, ArrowUpDown, ArrowUp, ArrowDown, Phone, Mail } from 'lucide-react'
 import axios from 'axios'
+import { exportCSV } from '../utils/export'
 
-const statusBadge = (status) => {
-    const cls = { 'On Duty': 'badge-on-duty', 'Suspended': 'badge-suspended' }
-    return <span className={`badge ${cls[status] || ''}`}>{status}</span>
-}
+const statusBadge = (s) => <span className={`badge badge-${s.toLowerCase().replace(/ /g, '-')}`}>{s}</span>
+const getScoreColor = (score) => score >= 90 ? 'var(--success)' : score >= 75 ? 'var(--amber)' : 'var(--danger)'
 
 export default function Performance() {
     const { searchTerm } = useOutletContext()
     const [drivers, setDrivers] = useState([])
     const [vehicles, setVehicles] = useState([])
     const [loading, setLoading] = useState(true)
+    const [sortBy, setSortBy] = useState('name')
+    const [sortOrder, setSortOrder] = useState('asc')
+    const [statusFilter, setStatusFilter] = useState('')
 
     useEffect(() => {
-        Promise.all([
-            axios.get('/api/drivers'),
-            axios.get('/api/vehicles')
-        ]).then(([driversRes, vehiclesRes]) => {
-            setDrivers(driversRes.data)
-            setVehicles(vehiclesRes.data)
-            setLoading(false)
-        }).catch(() => setLoading(false))
-    }, [])
+        const params = new URLSearchParams()
+        if (searchTerm) params.set('search', searchTerm)
+        if (statusFilter) params.set('status', statusFilter)
+        params.set('sortBy', sortBy)
+        params.set('sortOrder', sortOrder)
+        Promise.all([axios.get(`/api/drivers?${params}`), axios.get('/api/vehicles')])
+            .then(([d, v]) => { setDrivers(d.data); setVehicles(v.data); setLoading(false) })
+            .catch(() => setLoading(false))
+    }, [searchTerm, statusFilter, sortBy, sortOrder])
 
-    const filteredDrivers = drivers.filter(d =>
-        !searchTerm || d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.license_number.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-
-    const getScoreColor = (score) => {
-        if (score >= 90) return '#22c55e'
-        if (score >= 75) return '#f59e0b'
-        return '#ef4444'
+    const handleSort = (col) => {
+        if (sortBy === col) setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+        else { setSortBy(col); setSortOrder('asc') }
     }
 
-    if (loading) return <div style={{ color: '#64748b', textAlign: 'center', padding: '60px' }}>Loading performance data...</div>
+    const SortIcon = ({ col }) => {
+        if (sortBy !== col) return <ArrowUpDown size={11} style={{ opacity: 0.3 }} />
+        return sortOrder === 'asc' ? <ArrowUp size={11} style={{ color: 'var(--accent)' }} /> : <ArrowDown size={11} style={{ color: 'var(--accent)' }} />
+    }
 
-    // Top performers
-    const topDrivers = [...drivers].sort((a, b) => b.safety_score_percent - a.safety_score_percent).slice(0, 3)
+    const topPerformers = useMemo(() => {
+        return [...drivers].sort((a, b) => (Number(b.safety_score_percent) + Number(b.completion_rate_percent)) - (Number(a.safety_score_percent) + Number(a.completion_rate_percent))).slice(0, 3)
+    }, [drivers])
+
+    const fleetStatus = useMemo(() => ({
+        idle: vehicles.filter(v => v.status === 'Idle').length,
+        onTrip: vehicles.filter(v => v.status === 'On Trip').length,
+        inShop: vehicles.filter(v => v.status === 'In Shop').length,
+    }), [vehicles])
+
+    if (loading) return <div style={{ display: 'grid', gap: '12px' }}>{[1, 2, 3].map(i => <div key={i} className="shimmer" style={{ height: '55px', borderRadius: 'var(--radius-md)' }} />)}</div>
 
     return (
         <div>
             {/* Top Performers */}
-            <div style={{ marginBottom: '28px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Award size={18} style={{ color: '#f59e0b' }} /> Top Performers
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                    {topDrivers.map((d, i) => (
-                        <div key={d.id} className="kpi-card" style={{ position: 'relative' }}>
-                            <div style={{
-                                position: 'absolute', top: '12px', right: '12px',
-                                background: i === 0 ? 'rgba(245,158,11,0.2)' : 'rgba(100,116,139,0.2)',
-                                borderRadius: '8px', padding: '4px 10px',
-                                fontSize: '0.7rem', fontWeight: 700,
-                                color: i === 0 ? '#f59e0b' : '#94a3b8'
-                            }}>
-                                #{i + 1}
+            <div className="animate-fade-in" style={{ marginBottom: '22px' }}>
+                <h3 style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}><Trophy size={15} style={{ color: 'var(--amber)' }} /> Top Performers</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                    {topPerformers.map((d, i) => (
+                        <div key={d.id} className={`kpi-card animate-fade-in-${i + 1}`} style={{ padding: '20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                                <div style={{
+                                    width: '36px', height: '36px', borderRadius: 'var(--radius-sm)',
+                                    background: i === 0 ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' : i === 1 ? 'linear-gradient(135deg, #94a3b8, #64748b)' : 'linear-gradient(135deg, #cd7c2e, #a0522d)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem'
+                                }}>{i + 1}</div>
+                                <div>
+                                    <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{d.name}</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{d.license_number}</div>
+                                </div>
                             </div>
-                            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '8px' }}>{d.name}</div>
-                            <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
-                                <div>
-                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Safety</div>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: getScoreColor(d.safety_score_percent) }}>
-                                        {Number(d.safety_score_percent).toFixed(0)}%
-                                    </div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Completion</div>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: getScoreColor(d.completion_rate_percent) }}>
-                                        {Number(d.completion_rate_percent).toFixed(0)}%
-                                    </div>
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Complaints</div>
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: d.complaints_count === 0 ? '#22c55e' : '#f59e0b' }}>
-                                        {d.complaints_count}
-                                    </div>
-                                </div>
+                            <div style={{ display: 'flex', gap: '20px', fontSize: '0.72rem' }}>
+                                <div><span style={{ color: 'var(--text-muted)' }}>Safety</span><div style={{ fontWeight: 800, color: getScoreColor(Number(d.safety_score_percent)), fontSize: '1.1rem' }}>{Number(d.safety_score_percent).toFixed(0)}%</div></div>
+                                <div><span style={{ color: 'var(--text-muted)' }}>Completion</span><div style={{ fontWeight: 800, color: getScoreColor(Number(d.completion_rate_percent)), fontSize: '1.1rem' }}>{Number(d.completion_rate_percent).toFixed(0)}%</div></div>
+                                <div><span style={{ color: 'var(--text-muted)' }}>Complaints</span><div style={{ fontWeight: 800, color: d.complaints_count === 0 ? 'var(--success)' : 'var(--amber)', fontSize: '1.1rem' }}>{d.complaints_count}</div></div>
                             </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* Driver Performance Table */}
-            <div style={{ marginBottom: '28px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <UserCheck size={18} style={{ color: '#818cf8' }} /> All Drivers
-                </h3>
-                <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', overflow: 'hidden' }}>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Driver</th>
-                                    <th>License</th>
-                                    <th>License Expiry</th>
-                                    <th>Completion Rate</th>
-                                    <th>Safety Score</th>
-                                    <th>Complaints</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredDrivers.map(d => (
-                                    <tr key={d.id}>
-                                        <td style={{ fontWeight: 600, color: '#f1f5f9' }}>{d.name}</td>
-                                        <td style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>{d.license_number}</td>
-                                        <td>{new Date(d.license_expiry_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{ width: '60px', height: '6px', background: '#334155', borderRadius: '3px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${d.completion_rate_percent}%`, height: '100%', background: getScoreColor(d.completion_rate_percent), borderRadius: '3px' }} />
-                                                </div>
-                                                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: getScoreColor(d.completion_rate_percent) }}>
-                                                    {Number(d.completion_rate_percent).toFixed(1)}%
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{ width: '60px', height: '6px', background: '#334155', borderRadius: '3px', overflow: 'hidden' }}>
-                                                    <div style={{ width: `${d.safety_score_percent}%`, height: '100%', background: getScoreColor(d.safety_score_percent), borderRadius: '3px' }} />
-                                                </div>
-                                                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: getScoreColor(d.safety_score_percent) }}>
-                                                    {Number(d.safety_score_percent).toFixed(1)}%
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                color: d.complaints_count === 0 ? '#22c55e' : d.complaints_count <= 2 ? '#f59e0b' : '#ef4444',
-                                                fontWeight: 600,
-                                            }}>
-                                                {d.complaints_count > 0 && <AlertCircle size={14} />}
-                                                {d.complaints_count}
-                                            </span>
-                                        </td>
-                                        <td>{statusBadge(d.status)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+            {/* Fleet Status */}
+            <div className="animate-fade-in-3" style={{ marginBottom: '22px' }}>
+                <h3 style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px' }}>Fleet Status</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                    {[
+                        { label: 'Idle', count: fleetStatus.idle, color: 'var(--success)', bg: 'var(--success-dim)' },
+                        { label: 'On Trip', count: fleetStatus.onTrip, color: 'var(--info)', bg: 'var(--info-dim)' },
+                        { label: 'In Shop', count: fleetStatus.inShop, color: 'var(--amber)', bg: 'var(--warning-dim)' },
+                    ].map(s => (
+                        <div key={s.label} className="kpi-card" style={{ padding: '18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 900, color: s.color }}>{s.count}</div>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>{s.label}</div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {/* Vehicle Fleet Summary */}
-            <div>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <TrendingUp size={18} style={{ color: '#06b6d4' }} /> Fleet Status Summary
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                    {['Idle', 'On Trip', 'In Shop'].map(status => {
-                        const count = vehicles.filter(v => v.status === status).length
-                        const colors = { 'Idle': '#22c55e', 'On Trip': '#818cf8', 'In Shop': '#f59e0b' }
-                        return (
-                            <div key={status} className="kpi-card">
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600 }}>{status}</span>
-                                    <span style={{ fontSize: '2rem', fontWeight: 800, color: colors[status] }}>{count}</span>
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-                                    {count === 1 ? 'vehicle' : 'vehicles'}
-                                </div>
-                            </div>
-                        )
-                    })}
+            {/* Driver Table */}
+            <div className="animate-fade-in-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.83rem', fontWeight: 700 }}>{drivers.length} drivers</p>
+                    <select className="form-select" style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                        <option value="">All Status</option>
+                        <option value="On Duty">On Duty</option>
+                        <option value="Suspended">Suspended</option>
+                    </select>
+                </div>
+                <button className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '8px 14px' }} onClick={() => exportCSV(drivers, 'drivers.csv')}><Download size={15} /> CSV</button>
+            </div>
+
+            <div className="glass-card animate-fade-in-5" style={{ overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                    <table className="data-table">
+                        <thead><tr>
+                            <th className="sortable" onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>Driver <SortIcon col="name" /></th>
+                            <th>Contact</th>
+                            <th>License</th>
+                            <th className="sortable" onClick={() => handleSort('completion_rate_percent')} style={{ cursor: 'pointer' }}>Completion <SortIcon col="completion_rate_percent" /></th>
+                            <th className="sortable" onClick={() => handleSort('safety_score_percent')} style={{ cursor: 'pointer' }}>Safety <SortIcon col="safety_score_percent" /></th>
+                            <th className="sortable" onClick={() => handleSort('complaints_count')} style={{ cursor: 'pointer' }}>Complaints <SortIcon col="complaints_count" /></th>
+                            <th className="sortable" onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>Status <SortIcon col="status" /></th>
+                        </tr></thead>
+                        <tbody>
+                            {drivers.map(d => (
+                                <tr key={d.id}>
+                                    <td>
+                                        <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{d.name}</div>
+                                    </td>
+                                    <td>
+                                        <div style={{ fontSize: '0.72rem' }}>
+                                            {d.mobile && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-secondary)' }}><Phone size={11} style={{ color: 'var(--accent)' }} /> {d.mobile}</div>}
+                                            {d.email && <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-secondary)', marginTop: '2px' }}><Mail size={11} style={{ color: 'var(--pink)' }} /> {d.email}</div>}
+                                            {!d.mobile && !d.email && <span style={{ color: 'var(--text-muted)', fontSize: '0.68rem', fontStyle: 'italic' }}>No contact</span>}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{d.license_number}</div>
+                                        <div style={{ fontSize: '0.62rem', color: new Date(d.license_expiry_date) < new Date() ? 'var(--danger)' : 'var(--text-muted)', marginTop: '2px' }}>
+                                            Exp: {new Date(d.license_expiry_date).toLocaleDateString('en-IN')}
+                                            {new Date(d.license_expiry_date) < new Date() && <span style={{ marginLeft: '4px' }}>⚠</span>}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ flex: 1, height: '5px', borderRadius: '3px', background: 'var(--border-subtle)', overflow: 'hidden', maxWidth: '70px' }}>
+                                                <div style={{ height: '100%', width: `${Number(d.completion_rate_percent)}%`, background: getScoreColor(Number(d.completion_rate_percent)), borderRadius: '3px', transition: 'width 0.4s ease' }} />
+                                            </div>
+                                            <span style={{ fontWeight: 800, color: getScoreColor(Number(d.completion_rate_percent)), fontSize: '0.82rem' }}>{Number(d.completion_rate_percent).toFixed(1)}%</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ flex: 1, height: '5px', borderRadius: '3px', background: 'var(--border-subtle)', overflow: 'hidden', maxWidth: '70px' }}>
+                                                <div style={{ height: '100%', width: `${Number(d.safety_score_percent)}%`, background: getScoreColor(Number(d.safety_score_percent)), borderRadius: '3px', transition: 'width 0.4s ease' }} />
+                                            </div>
+                                            <span style={{ fontWeight: 800, color: getScoreColor(Number(d.safety_score_percent)), fontSize: '0.82rem' }}>{Number(d.safety_score_percent).toFixed(1)}%</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            {d.complaints_count > 0 && <AlertTriangle size={13} style={{ color: d.complaints_count >= 3 ? 'var(--danger)' : 'var(--amber)' }} />}
+                                            <span style={{ fontWeight: 800, color: d.complaints_count === 0 ? 'var(--success)' : d.complaints_count >= 3 ? 'var(--danger)' : 'var(--amber)', fontSize: '0.9rem' }}>{d.complaints_count}</span>
+                                        </div>
+                                    </td>
+                                    <td>{statusBadge(d.status)}</td>
+                                </tr>
+                            ))}
+                            {drivers.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '50px' }}>No drivers found</td></tr>}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

@@ -65,6 +65,12 @@ router.post('/', async (req, res) => {
         if (parseFloat(max_payload_kg) <= 0) {
             return res.status(400).json({ error: 'Max payload must be greater than 0' });
         }
+        if (odometer !== undefined && parseFloat(odometer) < 0) {
+            return res.status(400).json({ error: 'Odometer cannot be negative' });
+        }
+        if (acquisition_cost !== undefined && parseFloat(acquisition_cost) < 0) {
+            return res.status(400).json({ error: 'Acquisition cost cannot be negative' });
+        }
 
         const [result] = await db.query(
             'INSERT INTO vehicles (plate, model, type, max_payload_kg, odometer, acquisition_cost) VALUES (?, ?, ?, ?, ?, ?)',
@@ -98,6 +104,10 @@ router.put('/:id', async (req, res) => {
 
         if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
+        // Negative value checks
+        if (max_payload_kg !== undefined && parseFloat(max_payload_kg) <= 0) return res.status(400).json({ error: 'Max payload must be greater than 0' });
+        if (odometer !== undefined && parseFloat(odometer) < 0) return res.status(400).json({ error: 'Odometer cannot be negative' });
+
         params.push(req.params.id);
         await db.query(`UPDATE vehicles SET ${fields.join(', ')} WHERE id = ?`, params);
 
@@ -106,6 +116,27 @@ router.put('/:id', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to update vehicle' });
+    }
+});
+
+// DELETE vehicle
+router.delete('/:id', async (req, res) => {
+    try {
+        const [vehicles] = await db.query('SELECT * FROM vehicles WHERE id = ?', [req.params.id]);
+        if (vehicles.length === 0) return res.status(404).json({ error: 'Vehicle not found' });
+        if (vehicles[0].status === 'On Trip') return res.status(400).json({ error: 'Cannot delete a vehicle currently on trip' });
+
+        const [activeTrips] = await db.query("SELECT COUNT(*) AS cnt FROM trips WHERE vehicle_id = ? AND status = 'Dispatched'", [req.params.id]);
+        if (activeTrips[0].cnt > 0) return res.status(400).json({ error: 'Cannot delete vehicle with active trips' });
+
+        await db.query('DELETE FROM expenses WHERE vehicle_id = ?', [req.params.id]);
+        await db.query('DELETE FROM maintenance_logs WHERE vehicle_id = ?', [req.params.id]);
+        await db.query('DELETE FROM trips WHERE vehicle_id = ?', [req.params.id]);
+        await db.query('DELETE FROM vehicles WHERE id = ?', [req.params.id]);
+        res.json({ message: 'Vehicle deleted successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to delete vehicle' });
     }
 });
 

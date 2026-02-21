@@ -1,154 +1,105 @@
 import { useState, useEffect } from 'react'
-import { Fuel, TrendingUp, Percent, IndianRupee, Truck } from 'lucide-react'
+import { Fuel, TrendingUp, Truck, Download, FileText, Activity } from 'lucide-react'
 import axios from 'axios'
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts'
+import { useTheme } from '../context/ThemeContext'
+import { exportCSV, exportPDF } from '../utils/export'
 
 const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-        return (
-            <div style={{
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '10px',
-                padding: '12px 16px',
-                boxShadow: '0 8px 25px rgba(0,0,0,0.3)',
-            }}>
-                <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginBottom: '6px', fontWeight: 600 }}>{label}</div>
-                {payload.map((p, i) => (
-                    <div key={i} style={{ color: p.color, fontSize: '0.875rem', fontWeight: 700 }}>
-                        {p.name}: {typeof p.value === 'number' ? p.value.toLocaleString('en-IN') : p.value}
-                    </div>
-                ))}
-            </div>
-        )
-    }
-    return null
+    if (!active || !payload?.length) return null
+    return (
+        <div style={{ background: 'var(--bg-glass-strong)', backdropFilter: 'blur(20px)', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-md)', padding: '14px 18px', boxShadow: 'var(--shadow-md)' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.68rem', marginBottom: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
+            {payload.map((p, i) => <div key={i} style={{ color: p.color, fontSize: '0.83rem', fontWeight: 700 }}>{p.name}: {typeof p.value === 'number' ? p.value.toLocaleString('en-IN') : p.value}</div>)}
+        </div>
+    )
 }
 
 export default function Analytics() {
+    const { theme } = useTheme()
     const [summary, setSummary] = useState(null)
     const [fuelTrend, setFuelTrend] = useState([])
     const [costliest, setCostliest] = useState([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        Promise.all([
-            axios.get('/api/analytics/summary'),
-            axios.get('/api/analytics/fuel-trend'),
-            axios.get('/api/analytics/costliest-vehicles'),
-        ]).then(([summaryRes, fuelRes, costRes]) => {
-            setSummary(summaryRes.data)
-            setFuelTrend(fuelRes.data)
-            setCostliest(costRes.data.map(c => ({
-                ...c,
-                label: c.plate,
-                maintenance_cost: Number(c.maintenance_cost),
-                fuel_cost: Number(c.fuel_cost),
-                total_cost: Number(c.total_cost),
-            })))
-            setLoading(false)
-        }).catch(() => setLoading(false))
+        Promise.all([axios.get('/api/analytics/summary'), axios.get('/api/analytics/fuel-trend'), axios.get('/api/analytics/costliest-vehicles')])
+            .then(([s, f, c]) => {
+                setSummary(s.data)
+                setFuelTrend(f.data)
+                setCostliest(c.data.map(v => ({ ...v, label: v.plate, maintenance_cost: Number(v.maintenance_cost), fuel_cost: Number(v.fuel_cost), total_cost: Number(v.total_cost) })))
+                setLoading(false)
+            }).catch(() => setLoading(false))
     }, [])
 
-    if (loading) return <div style={{ color: '#64748b', textAlign: 'center', padding: '60px' }}>Loading analytics...</div>
+    const gridColor = theme === 'dark' ? 'rgba(130,90,255,0.08)' : 'rgba(147,51,234,0.06)'
+    const axisColor = theme === 'dark' ? '#5e5590' : '#9e97c0'
+
+    if (loading) return <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>{[1, 2, 3].map(i => <div key={i} className="shimmer" style={{ height: '150px', borderRadius: 'var(--radius-2xl)' }} />)}</div>
+
+    const kpis = [
+        { label: 'Total Fuel Cost', value: `₹${summary ? (summary.totalFuelCost / 100000).toFixed(2) : '0'}L`, sub: 'across all trips', icon: Fuel, color: 'var(--pink)', bg: 'var(--pink-dim)' },
+        { label: 'Fleet ROI', value: `${summary?.fleetROI || 0}%`, sub: '(revenue − costs) ÷ acquisition', icon: TrendingUp, color: 'var(--success)', bg: 'var(--success-dim)' },
+        { label: 'Utilization Rate', value: `${summary?.utilizationRate || 0}%`, sub: `${summary?.activeVehicles || 0} of ${summary?.totalVehicles || 0} active`, icon: Activity, color: 'var(--cyan)', bg: 'var(--cyan-dim)' },
+    ]
 
     return (
         <div>
-            {/* KPI Widgets */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '28px' }}>
-                <div className="kpi-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ background: 'rgba(239,68,68,0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                            <Fuel size={22} style={{ color: '#ef4444' }} />
+            {/* KPIs */}
+            <div className="kpi-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '28px' }}>
+                {kpis.map((kpi, i) => (
+                    <div key={i} className={`kpi-card animate-fade-in-${i + 1}`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                            <div style={{ background: kpi.bg, borderRadius: 'var(--radius-md)', padding: '10px', display: 'flex', border: '1px solid var(--border-glass)', transition: 'all 0.3s ease' }}>
+                                <kpi.icon size={20} style={{ color: kpi.color }} />
+                            </div>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{kpi.label}</span>
                         </div>
-                        <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Fuel Cost</span>
+                        <div style={{ fontSize: '2.2rem', fontWeight: 900, color: kpi.color, letterSpacing: '-0.04em', lineHeight: 1 }}>{kpi.value}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', fontWeight: 500 }}>{kpi.sub}</div>
                     </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.02em' }}>
-                        ₹{summary ? (summary.totalFuelCost / 100000).toFixed(2) : '0'}L
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>across all trips</div>
-                </div>
+                ))}
+            </div>
 
-                <div className="kpi-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ background: 'rgba(34,197,94,0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                            <TrendingUp size={22} style={{ color: '#22c55e' }} />
-                        </div>
-                        <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Fleet ROI</span>
-                    </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 800, color: '#22c55e', letterSpacing: '-0.02em' }}>
-                        {summary ? summary.fleetROI : 0}%
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>(revenue - costs) / acquisition</div>
-                </div>
-
-                <div className="kpi-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ background: 'rgba(6,182,212,0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                            <Truck size={22} style={{ color: '#06b6d4' }} />
-                        </div>
-                        <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Utilization Rate</span>
-                    </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 800, color: '#06b6d4', letterSpacing: '-0.02em' }}>
-                        {summary ? summary.utilizationRate : 0}%
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
-                        {summary ? summary.activeVehicles : 0} of {summary ? summary.totalVehicles : 0} vehicles active
-                    </div>
-                </div>
+            {/* Export actions */}
+            <div className="animate-fade-in-3" style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '8px 14px' }} onClick={() => exportCSV(costliest, 'costliest_vehicles.csv')}><Download size={15} /> Export CSV</button>
+                <button className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '8px 14px' }} onClick={() => exportPDF('Fleet Analytics Report', costliest)}><FileText size={15} /> PDF Report</button>
             </div>
 
             {/* Charts */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                {/* Fuel Efficiency Trend Line Chart */}
-                <div style={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '16px',
-                    padding: '24px',
-                }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '20px' }}>
-                        Fuel Efficiency Trend (km/L)
-                    </h3>
+            <div className="chart-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div className="glass-card animate-fade-in-3" style={{ padding: '28px', overflow: 'visible' }}>
+                    <h3 style={{ fontSize: '0.93rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '24px' }}>Fuel Efficiency Trend (km/L)</h3>
                     <ResponsiveContainer width="100%" height={320}>
-                        <LineChart data={fuelTrend}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                            <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                            <YAxis stroke="#64748b" fontSize={12} />
+                        <AreaChart data={fuelTrend}>
+                            <defs>
+                                <linearGradient id="fuelGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor="#9333ea" stopOpacity={0.3} />
+                                    <stop offset="100%" stopColor="#9333ea" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                            <XAxis dataKey="month" stroke={axisColor} fontSize={11} fontWeight={600} />
+                            <YAxis stroke={axisColor} fontSize={11} fontWeight={600} />
                             <Tooltip content={<CustomTooltip />} />
-                            <Legend />
-                            <Line
-                                type="monotone"
-                                dataKey="km_per_litre"
-                                stroke="#818cf8"
-                                strokeWidth={3}
-                                dot={{ fill: '#818cf8', strokeWidth: 2, r: 5 }}
-                                activeDot={{ r: 7, strokeWidth: 0 }}
-                                name="km/L"
-                            />
-                        </LineChart>
+                            <Legend wrapperStyle={{ fontSize: '0.73rem', fontWeight: 600 }} />
+                            <Area type="monotone" dataKey="km_per_litre" stroke="#9333ea" strokeWidth={3} fill="url(#fuelGrad)" dot={{ fill: '#9333ea', strokeWidth: 2, r: 5, stroke: '#050510' }} activeDot={{ r: 8, strokeWidth: 0, fill: '#9333ea' }} name="km/L" />
+                        </AreaChart>
                     </ResponsiveContainer>
                 </div>
 
-                {/* Top 5 Costliest Vehicles Bar Chart */}
-                <div style={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '16px',
-                    padding: '24px',
-                }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '20px' }}>
-                        Top 5 Costliest Vehicles
-                    </h3>
+                <div className="glass-card animate-fade-in-4" style={{ padding: '28px', overflow: 'visible' }}>
+                    <h3 style={{ fontSize: '0.93rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '24px' }}>Top 5 Costliest Vehicles</h3>
                     <ResponsiveContainer width="100%" height={320}>
                         <BarChart data={costliest} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                            <XAxis type="number" stroke="#64748b" fontSize={12} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
-                            <YAxis dataKey="label" type="category" stroke="#64748b" fontSize={11} width={120} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+                            <XAxis type="number" stroke={axisColor} fontSize={11} fontWeight={600} tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
+                            <YAxis dataKey="label" type="category" stroke={axisColor} fontSize={10} fontWeight={700} width={115} />
                             <Tooltip content={<CustomTooltip />} />
-                            <Legend />
+                            <Legend wrapperStyle={{ fontSize: '0.73rem', fontWeight: 600 }} />
                             <Bar dataKey="maintenance_cost" fill="#f59e0b" name="Maintenance" stackId="a" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="fuel_cost" fill="#ef4444" name="Fuel" stackId="a" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="fuel_cost" fill="#ec4899" name="Fuel" stackId="a" radius={[0, 6, 6, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -156,3 +107,5 @@ export default function Analytics() {
         </div>
     )
 }
+
+

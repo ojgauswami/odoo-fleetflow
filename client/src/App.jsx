@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
+import { ToastProvider } from './components/ToastSystem'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -9,6 +11,7 @@ import Maintenance from './pages/Maintenance'
 import TripExpense from './pages/TripExpense'
 import Performance from './pages/Performance'
 import Analytics from './pages/Analytics'
+import AdminPanel from './pages/AdminPanel'
 
 function ProtectedRoute({ children }) {
     const { user } = useAuth()
@@ -18,15 +21,10 @@ function ProtectedRoute({ children }) {
 
 function AppRoutes() {
     const { user } = useAuth()
-
     return (
         <Routes>
             <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
-            <Route path="/" element={
-                <ProtectedRoute>
-                    <Layout />
-                </ProtectedRoute>
-            }>
+            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="vehicles" element={<VehicleRegistry />} />
@@ -35,6 +33,7 @@ function AppRoutes() {
                 <Route path="expenses" element={<TripExpense />} />
                 <Route path="performance" element={<Performance />} />
                 <Route path="analytics" element={<Analytics />} />
+                <Route path="admin" element={<AdminPanel />} />
             </Route>
             <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
@@ -43,8 +42,12 @@ function AppRoutes() {
 
 export default function App() {
     return (
-        <AuthProvider>
-            <AppRoutes />
-        </AuthProvider>
+        <ThemeProvider>
+            <AuthProvider>
+                <ToastProvider>
+                    <AppRoutes />
+                </ToastProvider>
+            </AuthProvider>
+        </ThemeProvider>
     )
 }

@@ -1,134 +1,102 @@
 import { useState, useEffect } from 'react'
-import { useOutletContext } from 'react-router-dom'
-import { Truck, AlertTriangle, Package, MapPin, ArrowRight } from 'lucide-react'
+import { Truck, AlertTriangle, TrendingUp, Package, MapPin, ArrowRight } from 'lucide-react'
 import axios from 'axios'
+import { useTranslation } from 'react-i18next'
 
-const statusBadge = (status) => {
-    const cls = {
-        'Draft': 'badge-draft',
-        'Dispatched': 'badge-dispatched',
-        'Completed': 'badge-completed',
-    }
-    return <span className={`badge ${cls[status] || ''}`}>{status}</span>
-}
+const statusBadge = (s) => <span className={`badge badge-${s.toLowerCase().replace(/ /g, '-')}`}>{s}</span>
 
 export default function Dashboard() {
-    const { searchTerm } = useOutletContext()
-    const [data, setData] = useState({ kpis: { activeFleet: 0, maintenanceAlerts: 0, pendingCargo: 0 }, activeTrips: [] })
+    const { t } = useTranslation()
+    const [kpis, setKpis] = useState({ activeFleet: 0, maintenanceAlerts: 0, pendingCargo: 0 })
+    const [analytics, setAnalytics] = useState({ utilizationRate: 0, totalVehicles: 0, activeVehicles: 0 })
+    const [activeTrips, setActiveTrips] = useState([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        axios.get('/api/dashboard').then(res => {
-            setData(res.data)
-            setLoading(false)
-        }).catch(() => setLoading(false))
+        Promise.all([axios.get('/api/dashboard'), axios.get('/api/analytics/summary')])
+            .then(([dash, an]) => {
+                setKpis(dash.data.kpis)
+                setActiveTrips(dash.data.activeTrips)
+                setAnalytics(an.data)
+                setLoading(false)
+            })
+            .catch(() => setLoading(false))
     }, [])
 
-    const filtered = data.activeTrips.filter(t =>
-        !searchTerm || t.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.driver_name.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const kpiCards = [
+        { label: t('dashboard.activeFleet'), value: kpis.activeFleet, icon: <Truck size={19} />, color: 'var(--info)', bg: 'var(--info-dim)', sub: t('dashboard.totalVehicles', { count: analytics.totalVehicles }) },
+        { label: t('dashboard.maintenanceAlerts'), value: kpis.maintenanceAlerts, icon: <AlertTriangle size={19} />, color: 'var(--amber)', bg: 'var(--warning-dim)', sub: t('dashboard.vehiclesInShop') },
+        { label: t('dashboard.utilizationRate'), value: `${analytics.utilizationRate}%`, icon: <TrendingUp size={19} />, color: 'var(--accent)', bg: 'var(--accent-dim)', sub: t('dashboard.onTrip', { count: analytics.activeVehicles }) },
+        { label: t('dashboard.pendingCargo'), value: `${(kpis.pendingCargo / 1000).toFixed(1)}T`, icon: <Package size={19} />, color: 'var(--cyan)', bg: 'var(--cyan-dim)', sub: t('dashboard.awaitingDelivery') },
+    ]
 
-    if (loading) return <div style={{ color: '#64748b', textAlign: 'center', padding: '60px' }}>Loading dashboard...</div>
+    if (loading) return <div style={{ display: 'grid', gap: '12px' }}>{[1, 2, 3, 4].map(i => <div key={i} className="shimmer" style={{ height: '100px', borderRadius: 'var(--radius-xl)' }} />)}</div>
 
     return (
         <div>
-            {/* KPI Widgets */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '28px' }}>
-                <div className="kpi-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ background: 'rgba(99,102,241,0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                            <Truck size={22} style={{ color: '#818cf8' }} />
+            {/* KPI Cards */}
+            <div className="kpi-grid-3" style={{ marginBottom: '24px' }}>
+                {kpiCards.map((k, i) => (
+                    <div key={i} className={`kpi-card animate-fade-in-${i + 1}`}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+                            <div>
+                                <div style={{ fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '8px' }}>{k.label}</div>
+                                <div style={{ fontSize: '2rem', fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: '-0.04em' }}>{k.value}</div>
+                            </div>
+                            <div style={{ padding: '10px', background: k.bg, borderRadius: 'var(--radius-md)', display: 'flex', color: k.color, border: '1px solid var(--border-glass)' }}>{k.icon}</div>
                         </div>
-                        <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Active Fleet</span>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 500 }}>{k.sub}</div>
                     </div>
-                    <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.02em' }}>
-                        {data.kpis.activeFleet}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>vehicles on trip</div>
-                </div>
-
-                <div className="kpi-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ background: 'rgba(245,158,11,0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                            <AlertTriangle size={22} style={{ color: '#f59e0b' }} />
-                        </div>
-                        <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Maintenance Alerts</span>
-                    </div>
-                    <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#f59e0b', letterSpacing: '-0.02em' }}>
-                        {data.kpis.maintenanceAlerts}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>vehicles in shop</div>
-                </div>
-
-                <div className="kpi-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ background: 'rgba(6,182,212,0.15)', borderRadius: '10px', padding: '10px', display: 'flex' }}>
-                            <Package size={22} style={{ color: '#06b6d4' }} />
-                        </div>
-                        <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pending Cargo</span>
-                    </div>
-                    <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#06b6d4', letterSpacing: '-0.02em' }}>
-                        {(data.kpis.pendingCargo / 1000).toFixed(1)}T
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>total cargo weight</div>
-                </div>
+                ))}
             </div>
 
-            {/* Active Trips Table */}
-            <div style={{
-                background: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '16px',
-                overflow: 'hidden',
-            }}>
-                <div style={{
-                    padding: '20px 24px',
-                    borderBottom: '1px solid #334155',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                }}>
-                    <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9' }}>Active Trips</h2>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{filtered.length} trips</span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Route</th>
-                                <th>Vehicle</th>
-                                <th>Driver</th>
-                                <th>Cargo</th>
-                                <th>Est. Fuel Cost</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map(trip => (
-                                <tr key={trip.id}>
-                                    <td>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <MapPin size={14} style={{ color: '#6366f1' }} />
-                                            <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{trip.origin}</span>
-                                            <ArrowRight size={14} style={{ color: '#64748b' }} />
-                                            <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{trip.destination}</span>
-                                        </div>
-                                    </td>
-                                    <td>{trip.plate}</td>
-                                    <td>{trip.driver_name}</td>
-                                    <td>{(trip.cargo_weight_kg / 1000).toFixed(1)}T</td>
-                                    <td>₹{Number(trip.estimated_fuel_cost).toLocaleString('en-IN')}</td>
-                                    <td>{statusBadge(trip.status)}</td>
-                                </tr>
-                            ))}
-                            {filtered.length === 0 && (
-                                <tr><td colSpan={6} style={{ textAlign: 'center', color: '#64748b', padding: '40px' }}>No active trips</td></tr>
-                            )}
-                        </tbody>
-                    </table>
+            {/* Active Trips */}
+            <div className="animate-fade-in-5">
+                <h3 style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={15} style={{ color: 'var(--accent)' }} /> {t('dashboard.liveTrips')}
+                    <span style={{
+                        marginLeft: '6px', padding: '2px 10px', borderRadius: 'var(--radius-full)',
+                        background: 'var(--info-dim)', color: 'var(--info)',
+                        fontSize: '0.65rem', fontWeight: 800,
+                    }}>{activeTrips.length}</span>
+                </h3>
+
+                <div className="glass-card" style={{ overflow: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                        <table className="data-table">
+                            <thead><tr>
+                                <th>{t('dashboard.route')}</th>
+                                <th>{t('dashboard.vehicle')}</th>
+                                <th>{t('dashboard.driver')}</th>
+                                <th>{t('dashboard.cargo')}</th>
+                                <th>{t('dashboard.status')}</th>
+                            </tr></thead>
+                            <tbody>
+                                {activeTrips.map(t => (
+                                    <tr key={t.id}>
+                                        <td>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <MapPin size={13} style={{ color: 'var(--accent)' }} />
+                                                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{t.origin}</span>
+                                                <ArrowRight size={13} style={{ color: 'var(--text-muted)' }} />
+                                                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{t.destination}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div style={{ fontFamily: 'monospace', fontSize: '0.78rem', fontWeight: 600 }}>{t.plate}</div>
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t.vehicle_model}</div>
+                                        </td>
+                                        <td style={{ fontWeight: 600 }}>{t.driver_name}</td>
+                                        <td>{(Number(t.cargo_weight_kg) / 1000).toFixed(1)}T</td>
+                                        <td>{statusBadge(t.status)}</td>
+                                    </tr>
+                                ))}
+                                {activeTrips.length === 0 && (
+                                    <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '50px' }}>{t('dashboard.noTrips')}</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
